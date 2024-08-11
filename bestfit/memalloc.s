@@ -1,106 +1,108 @@
 .section .data
-.global brk_inicial
+.global brk_inicial 
 .global brk_atual
 
 brk_inicial: .quad 0
 brk_atual: .quad 0
 
-.section .text
-.global setup_brk                   # função que obtém o endereço de brk
-.global dismiss_brk                 # função que restaura o endereço de brk
-.global memory_alloc                # função para alocar um bloco de memória, retorna o endereço do bloco alocado
-.global memory_free                 # função para marcar um bloco ocupado como livre
+.section .text                      
+.global setup_brk                   # funcao que obtem o endereco de brk
+.global dismiss_brk                 # funcao que restaura o endereco de brk
+.global memory_alloc                # funcao para alocar um bloco de memoria, retorna o endereco do bloco alocado
+.global memory_free                 # funcao para marcar um bloco ocupado como livre
 
 setup_brk:
-    movq $12, %rax                  # código da syscall para chamar a brk
+    movq $12, %rax                  # codigo da syscall para chamar a brk
     movq $0, %rdi                   # retorna o valor atual de brk em %rax
-    syscall                         # chama a syscall
-    movq %rax, brk_inicial          # salva o começo da heap em brk_inicial
-    movq %rax, brk_atual            # salva o começo da heap em brk_atual
-    ret
+    syscall                         # chama a syscall 
+    movq %rax, brk_inicial          # salva o comeco da heap em brk_inicial (constante)
+    movq %rax, brk_atual            # salva o comeco da heap em brk_atual (variavel)
+    ret                             # retorna
 
 dismiss_brk:
-    movq $12, %rax                  # código da syscall para chamar brk
-    movq brk_inicial, %rdi          # volta a brk para o início
+    movq $12, %rax                  # codigo da syscall para chamar brk
+    movq brk_inicial, %rdi          # volta a brk para o inicio
     syscall                         # chama a syscall
-    movq brk_inicial, %rax          # salva o endereço original da brk em %rax
-    movq %rax, brk_atual            # endereço atual da brk é o início
+    movq brk_inicial, %rax          # salva o endreco inicial da brk rax
+    movq %rax, brk_atual            # endereco atual da brk eh o inicio
     ret
 
 memory_alloc:
-    movq brk_inicial, %r8           # salva o início da brk em %r8
+    movq brk_inicial, %r8           # salva o inicio da brk em %r8
     movq brk_atual, %r9             # salva o lugar da brk atual em %r9
-    movq %rdi, %r10                 # salva o tamanho da alocação em %r10
-    cmpq %r8, %r9                  # compara se é a primeira alocação
-    je .aloca_bloco_novo           # se é a primeira, vai para a função de alocar novo bloco
+    movq %rdi, %r10                 # salva o tamanho da alocacao em %r10
+    cmpq %r8, %r9                   # compara de eh a primeira alocacao
+    je .aloca_bloco_novo            # se eh a primeira, vai para func de alocar novo bloco
 
 .encontra_bloco_livre:
-    movq %r8, %r11                 # %r11 vai salvar o endereço do primeiro bloco
-    movq $0, %r14                  # %r14 vai salvar o endereço do bloco a ser alocado
-    movq $9223372036854775807, %r15 # %r15 vai salvar o tamanho do menor bloco (inicialmente infinito)
-    
-.loop:
-    cmpq $0, (%r11)                # verifica se o bloco está livre
-    jne .proximo                   # se não está livre, vai para o próximo bloco
-    cmpq %r10, 8(%r11)             # verifica se o tamanho do bloco livre é suficiente
-    jg .proximo                    # se não for suficiente, vai para o próximo bloco
-    cmpq 8(%r11), %r15             # verifica se o tamanho do bloco é menor que o menor encontrado
-    jge .proximo                   # se não for menor, vai para o próximo bloco
-    movq 8(%r11), %r15             # salva o tamanho do bloco em %r15
-    movq %r11, %r14                # salva o endereço do bloco
+    movq %r8, %r11                  # %r11 vai salvar o endereco do primeiro bloco
+    movq $0, %r14                   # %r14 vai salvar o endereco do bloco a ser alocado
+    movq $100000000, %r15           # %r15 vai salvar o tamanho do bloco a ser alocado
 
-.proximo:
-    addq 8(%r11), %r11             # adiciona o tamanho do bloco para ir para o próximo
-    addq $16, %r11                 # %r11 é o início do próximo bloco
-    cmpq %r9, %r11                 # se %r11 é menor que %r9, então não chegou na brk atual
-    jl .loop                       # volta ao loop
-    cmpq $0, %r14                  # se não achou um bloco para alocar, aloca um novo bloco
-    je .aloca_bloco_novo           # realiza a alocação de um novo bloco
-    jmp .aloca_bloco_existente     # realiza a alocação no bloco existente
+.loop:
+    cmpq $0, (%r11)                 # verifica se o bloco esta livre
+    jne .proximo                    # se nao esta, entao vai para o proximo bloco
+    cmpq 8(%r11), %r10              # verifica se o tamanho do bloco livre é suficiente
+    jg .proximo                     # se nao for suficiente, vai para o proximo bloco
+    cmpq 8(%r11), %r15              # verifica se o tamanho eh o menor possivel
+    jle .proximo                    # se for menor ou igual, vai para o proximo
+    movq 8(%r11), %r15              # foi encontrado o novo menor bloco, entao atribui em %r15
+    movq %r11, %r14                 # salva o endereco do bloco
+
+.proximo:    
+    addq 8(%r11), %r11              # adiciona o tamanho do bloco para ir para o proximo
+    addq $16, %r11                  # %r11 eh o inicio do proximo bloco
+    cmpq %r9, %r11                  # se %r11 eh menor q %r9, entao nao chegou na brk atual
+    jl .loop                        # volta ao loop
+    cmpq $0, %r14                   # se chegou na brk atual, e nao achou um bloco pra alocar, entao aloca
+    je .aloca_bloco_novo            # realiza a alocacao de um novo bloco se nao achou um bloco
+    jmp .aloca_bloco_existente      # realiza a alocanao no bloco ja existente
 
 .aloca_bloco_novo:
-    addq $16, %r9                  # ajusta o endereço para o novo bloco
-    movq %r9, %r12                 # salva o início do bloco
-    addq %rdi, %r9                 # ajusta a brk para o novo bloco
-    movq %r9, %rdi                 # chama syscall com o novo valor da brk
-    movq $12, %rax                 # código da syscall para brk
-    syscall                        # faz a syscall
-    movq brk_atual, %r8            # salva o início do bloco
-    movq $1, (%r8)                 # marca o bloco como alocado
-    movq %r10, 8(%r8)              # define o tamanho do bloco
-    movq %r9, brk_atual            # atualiza o valor da brk atual
-    movq %r12, %rax                # retorna o endereço do bloco
-    ret
+    addq $16, %r9                   # comeco do bloco, depois do registro de 16 Bytes
+    movq %r9, %r12                  # salva o endereco do comeco do bloco em %r12
+    addq %rdi, %r9                  # adiciona o tamanho da alocao em %r9
+    movq %r9, %rdi                  # coloca o endereco para chamar a syscall
+    movq $12, %rax                  # codigo da syscall para brk
+    syscall                         # faz a syscall
+    movq brk_atual, %r8             # pega o comeco do bloco, onde esta o registro e salva em %r8
+    movq $1, (%r8)                  # coloca 1 para status de bloco alocado
+    movq %r10, 8(%r8)               # coloca o tamanho do bloco alocado no registro
+    movq %r9, brk_atual             # salva o valor atual da brk em atual
+    movq %r12, %rax                 # salva o endereco do comeco do bloco em %rax
+    ret                             # retorna 
 
-.aloca_bloco_existente:
-    movq $1, (%r14)                # marca o bloco como alocado
-    movq %r15, %r12                # %r12 = tamanho do bloco disponível
-    subq %r10, %r12                # %r12 = tamanho do bloco restante
-    cmpq $16, %r12                 # verifica se pode dividir o bloco
-    jl .aloca_inteiro              # se não puder dividir, aloca o bloco inteiro
-    movq %r10, 8(%r14)             # define o tamanho do bloco alocado
-    addq $16, %r14                 # ajusta o endereço para o início do novo bloco
-    movq %r14, %r13                # salva o início do novo bloco
-    addq %r10, %r14                # ajusta o endereço para o tamanho do novo bloco
-    movq $0, (%r14)                # marca o novo bloco como livre
-    movq %r12, 8(%r14)             # define o tamanho do novo bloco
-    movq %r13, %rax                # retorna o endereço do bloco alocado
-    ret
+.aloca_bloco_existente:             # como vai alocar em bloco ja existente, eh necesserio ver se eh possivel dividir em mais de um bloco
+    movq $1, (%r14)                 # coloca o byte de alocado no primeiro bloco
+    movq %r15, %r12                 # %r12 = tamanho do bloco a ser alocado
+    subq %r10, %r12                 # %r12 = tamanho do bloco total - tamanho a ser alocado
+    cmpq $17, %r12                  # se o valor de %r12 >= 17, entao da pra divir em 2
+    jl .aloca_inteiro               # aloca o bloco inteiro, ja que nao da pra dividir
+    movq %r10, 8(%r14)              # coloca o tamanho do bloco
+    addq $16, %r14                  # %r14 = inicio do bloco
+    movq %r14, %r13                 # salva o endereco do primeiro bloco em %r13
+    addq %r10, %r14                 # %r14 agora esta no comeco do registro do segundo bloco
+    movq $0, (%r14)                 # seta o status como nao alocado
+    subq $16, %r12                  # %r12 agora eh o tamanho disponivel que tem para alocacao
+    movq %r12, 8(%r14)              # adiciona o tamanaho do segundo bloco
+    movq %r13, %rax                 # coloca o endereco do primeiro bloco no %rax para retorno
+    ret                             # retorna
 
 .aloca_inteiro:
-    addq $16, %r14                 # ajusta o endereço para o início do bloco
-    movq %r14, %rax                # retorna o endereço do bloco
+    addq $16, %r14                  # %r14 agora aponta pro comeco do bloco
+    movq %r14, %rax                 # %rax = %r14 para retornar
     ret
 
 memory_free:
-    cmpq brk_atual, %rdi           # verifica se o argumento está dentro da área da heap
-    jge .fora_heap                 # se fora da área da heap, não pode liberar
-    cmpq brk_inicial, %rdi         # verifica se o argumento está dentro da área da heap
-    jl .fora_heap                  # se fora da área da heap, não pode liberar
-    subq $16, %rdi                 # ajusta o endereço para o início do bloco
-    movq $0, (%rdi)                # marca o bloco como livre
-    ret
+    cmpq brk_atual, %rdi            # verifica se o argumento esta dentro da area da heap
+    jge .fora_heap                  # se a entrada for maior que a area da heap, nao tem como dar free
+    cmpq brk_inicial, %rdi          # verifica se o argumento esta dentro da area da heap
+    jl .fora_heap                   # se a entrada for menor qeu a area da heap, nao tem como dar free
+    subq $16, %rdi                  # ajusta o endereço para apontar para o início do bloco
+    movq $0, (%rdi)                 # coloca 0 no status do bloco de alocado
+    ret                             # retorna 
 
 .fora_heap:
-    movq $0, %rax                  # retorna 0 se fora da área da heap
-    ret
+    movq $0, %rax                   # coloca 0 em %rax para retorno
+    ret                             # retorna    
+        
